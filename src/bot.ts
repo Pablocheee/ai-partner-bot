@@ -4,34 +4,28 @@ import { config } from './config';
 
 const bot = new Telegraf(config.telegramToken);
 const genAI = new GoogleGenerativeAI(config.geminiApiKey);
-const model = genAI.getGenerativeModel({
-  model: 'gemini-2.0-flash',
-  generationConfig: {
-    temperature: 0.7,
-    topK: 40,
-    topP: 0.95,
-  }
-});
+const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
 bot.on('text', async (ctx) => {
   try {
-    // Добавляем промпт для лучшего русского языка
-    const userMessage = ctx.message.text;
-    const prompt = `Ответь на русском языке на следующий вопрос/сообщение: ${userMessage}`;
+    console.log('Received message:', ctx.message.text);
     
-    const result = await model.generateContent(prompt);
+    const result = await model.generateContent(ctx.message.text);
+    console.log('Gemini result:', result);
+    
     const response = await result.response;
-    await ctx.reply(response.text());
-  } catch (error) {
-    console.error('Error:', error);
-    await ctx.reply('Произошла ошибка при обработке запроса');
+    console.log('Gemini response:', response);
+    
+    const text = response.text();
+    console.log('Response text:', text);
+    
+    await ctx.reply(text || 'Пустой ответ от Gemini');
+  } catch (error: any) {
+    console.error('Full error:', error);
+    await ctx.reply(`Ошибка: ${error.message || 'Unknown error'}`);
   }
 });
 
 bot.launch().then(() => {
-  console.log('Bot started with Gemini 2.0 Flash');
+  console.log('Bot started with diagnostics');
 });
-
-// Graceful shutdown
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
