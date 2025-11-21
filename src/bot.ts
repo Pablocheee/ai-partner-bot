@@ -1,7 +1,7 @@
 import { Telegraf } from 'telegraf';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { config } from './config';
-import '../server'; // Импортируем фиктивный сервер из корня
+import './server'; // server.ts теперь в той же папке src
 
 const bot = new Telegraf(config.telegramToken);
 const genAI = new GoogleGenerativeAI(config.geminiApiKey);
