@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: ai-partner-bot
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: GEMINI_API_KEY
+        value: AIzaSyDpDfvPi3dWliq9nWMf8uUUe36Yc5Jw64I
+      - key: TELEGRAM_BOT_TOKEN
+        value: YOUR_TELEGRAM_TOKEN
