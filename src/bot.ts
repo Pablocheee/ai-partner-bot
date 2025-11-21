@@ -23,7 +23,6 @@ bot.start(async (ctx) => {
 
 // Обработчик обычных сообщений
 bot.on('text', async (ctx) => {
-  // Пропускаем команды
   if (ctx.message.text.startsWith('/')) return;
   
   try {
@@ -36,6 +35,21 @@ bot.on('text', async (ctx) => {
   }
 });
 
-bot.launch().then(() => {
-  console.log('Bot started with welcome message');
-});
+// Запуск бота с обработкой ошибок
+async function startBot() {
+  try {
+    await bot.launch();
+    console.log('Bot started successfully');
+  } catch (error) {
+    console.error('Failed to start bot:', error);
+    // Ждем 10 секунд перед перезапуском
+    setTimeout(startBot, 10000);
+  }
+}
+
+// Graceful shutdown
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
+
+// Запускаем бота
+startBot();
