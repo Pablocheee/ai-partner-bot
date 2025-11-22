@@ -22,27 +22,24 @@ bot.start(async (ctx) => {
   await ctx.reply(welcomeText);
 });
 
-// Обработчик для полных сообщений /full_xxx
+// Обработчики для длинных сообщений
 bot.hears(/^\/full_([a-z0-9_]+)$/, async (ctx) => {
   const messageId = ctx.match[1];
   const fullText = LongMessageHandler.getLongMessage(messageId);
-  
   if (fullText) {
     await LongMessageHandler.sendLongMessage(ctx, fullText, messageId);
   } else {
-    await ctx.reply('? Message not found or expired');
+    await ctx.reply('? Message not found');
   }
 });
 
-// Обработчик для частей /parts_xxx
 bot.hears(/^\/parts_([a-z0-9_]+)$/, async (ctx) => {
   const messageId = ctx.match[1];
   const fullText = LongMessageHandler.getLongMessage(messageId);
-  
   if (fullText) {
     await LongMessageHandler.sendLongMessage(ctx, fullText, messageId);
   } else {
-    await ctx.reply('? Message not found or expired');
+    await ctx.reply('? Message not found');
   }
 });
 
@@ -52,38 +49,29 @@ bot.on('text', async (ctx) => {
   
   try {
     await ctx.sendChatAction('typing');
-    
     const result = await model.generateContent(ctx.message.text);
     const response = await result.response;
     const text = response.text();
-    
     await LongMessageHandler.sendLongMessage(ctx, text);
-    
   } catch (error) {
     console.error('Error:', error);
     await ctx.reply('Error. Try again later.');
   }
 });
 
-// ?? КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ - обработка конфликтов
+// ?? РЕШАЕМ КОНФЛИКТ - используем webhook вместо polling
 const startBot = async () => {
   try {
-    await bot.launch();
-    console.log('? Bot started successfully');
+    // Используем webhook mode чтобы избежать конфликтов
+    await bot.launch({ webhook: {} });
+    console.log('? Bot started successfully with webhook');
   } catch (error: any) {
-    if (error?.response?.description?.includes('Conflict')) {
-      console.log('?? Bot conflict detected, restarting in 30 seconds...');
-      setTimeout(startBot, 30000);
-    } else {
-      console.error('? Failed to start bot:', error);
-      setTimeout(startBot, 60000);
-    }
+    console.error('? Failed to start bot:', error.message);
+    // Не перезапускаем автоматически - ждем ручного вмешательства
   }
 };
 
-// Запускаем бота
 startBot();
 
-// Graceful shutdown
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
