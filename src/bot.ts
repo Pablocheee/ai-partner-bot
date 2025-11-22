@@ -6,6 +6,51 @@ const bot = new Telegraf(config.telegramToken);
 const genAI = new GoogleGenerativeAI(config.geminiApiKey);
 const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
+// Функция для разбивки длинных сообщений
+function splitMessage(text: string, maxLength: number = 4000): string[] {
+  if (text.length <= maxLength) return [text];
+  
+  const messages = [];
+  let currentMessage = '';
+  
+  const paragraphs = text.split('\n\n');
+  
+  for (const paragraph of paragraphs) {
+    if ((currentMessage + paragraph).length + 2 > maxLength) {
+      if (currentMessage) {
+        messages.push(currentMessage.trim());
+        currentMessage = '';
+      }
+      
+      // Если один абзац слишком длинный, разбиваем по предложениям
+      if (paragraph.length > maxLength) {
+        const sentences = paragraph.split('. ');
+        for (const sentence of sentences) {
+          if ((currentMessage + sentence).length + 2 > maxLength) {
+            if (currentMessage) {
+              messages.push(currentMessage.trim());
+              currentMessage = '';
+            }
+            messages.push(sentence.substring(0, maxLength));
+          } else {
+            currentMessage += sentence + '. ';
+          }
+        }
+      } else {
+        currentMessage = paragraph + '\n\n';
+      }
+    } else {
+      currentMessage += paragraph + '\n\n';
+    }
+  }
+  
+  if (currentMessage) {
+    messages.push(currentMessage.trim());
+  }
+  
+  return messages;
+}
+
 // Обработчик команды /start
 bot.start(async (ctx) => {
   const welcomeText = `Никаких лимитов и скрытых платежей.
@@ -23,33 +68,35 @@ bot.start(async (ctx) => {
 
 // Обработчик обычных сообщений
 bot.on('text', async (ctx) => {
+  // Пропускаем команды
   if (ctx.message.text.startsWith('/')) return;
   
   try {
+    // Показываем что бот "печатает"
+    await ctx.sendChatAction('typing');
+    
     const result = await model.generateContent(ctx.message.text);
     const response = await result.response;
-    await ctx.reply(response.text());
+    const text = response.text();
+    
+    // Разбиваем длинные сообщения
+    const messages = splitMessage(text);
+    
+    // Отправляем первое сообщение
+    await ctx.reply(messages[0]);
+    
+    // Отправляем остальные сообщения с задержкой
+    for (let i = 1; i < messages.length; i++) {
+      await new Promise(resolve => setTimeout(resolve, 300)); // Задержка 300мс
+      await ctx.reply(messages[i]);
+    }
+    
   } catch (error: any) {
     console.error('Error:', error);
     await ctx.reply('Произошла ошибка при обработке запроса');
   }
 });
 
-// Запуск бота с обработкой ошибок
-async function startBot() {
-  try {
-    await bot.launch();
-    console.log('Bot started successfully');
-  } catch (error) {
-    console.error('Failed to start bot:', error);
-    // Ждем 10 секунд перед перезапуском
-    setTimeout(startBot, 10000);
-  }
-}
-
-// Graceful shutdown
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
-
-// Запускаем бота
-startBot();
+bot.launch().then(() => {
+  console.log('Bot started with message splitting');
+});
