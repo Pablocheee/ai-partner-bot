@@ -1,80 +1,52 @@
 import { Telegraf } from 'telegraf';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { config } from './config';
+import { LongMessageHandler } from './long-message-handler';
 
 const bot = new Telegraf(config.telegramToken);
 const genAI = new GoogleGenerativeAI(config.geminiApiKey);
 const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
-// РџСЂРѕСЃС‚Р°СЏ Рё РЅР°РґРµР¶РЅР°СЏ С„СѓРЅРєС†РёСЏ СЂР°Р·Р±РёРІРєРё
-function splitMessage(text: string, maxLength: number = 4000): string[] {
-  if (!text || text.length <= maxLength) return [text];
-  
-  const messages: string[] = [];
-  const lines = text.split('\n');
-  let currentMessage = '';
-  
-  for (const line of lines) {
-    if ((currentMessage + line).length + 1 > maxLength) {
-      if (currentMessage) {
-        messages.push(currentMessage.trim());
-        currentMessage = '';
-      }
-      
-      // Р•СЃР»Рё РѕРґРЅР° СЃС‚СЂРѕРєР° СЃР»РёС€РєРѕРј РґР»РёРЅРЅР°СЏ, СЂР°Р·Р±РёРІР°РµРј РїРѕ СЃР»РѕРІР°Рј
-      if (line.length > maxLength) {
-        let chunk = '';
-        const words = line.split(' ');
-        for (const word of words) {
-          if ((chunk + word).length + 1 > maxLength) {
-            if (chunk) {
-              messages.push(chunk.trim());
-              chunk = '';
-            }
-            // Р•СЃР»Рё РѕРґРЅРѕ СЃР»РѕРІРѕ СЃР»РёС€РєРѕРј РґР»РёРЅРЅРѕРµ, СЂР°Р·Р±РёРІР°РµРј РїРѕ СЃРёРјРІРѕР»Р°Рј
-            if (word.length > maxLength) {
-              for (let i = 0; i < word.length; i += maxLength) {
-                messages.push(word.substring(i, i + maxLength));
-              }
-            } else {
-              messages.push(word);
-            }
-          } else {
-            chunk += word + ' ';
-          }
-        }
-        if (chunk) messages.push(chunk.trim());
-      } else {
-        messages.push(line);
-      }
-    } else {
-      currentMessage += line + '\n';
-    }
-  }
-  
-  if (currentMessage.trim()) {
-    messages.push(currentMessage.trim());
-  }
-  
-  return messages;
-}
-
-// РћР±СЂР°Р±РѕС‚С‡РёРє РєРѕРјР°РЅРґС‹ /start
+// Обработчик команды /start
 bot.start(async (ctx) => {
-  const welcomeText = `РќРёРєР°РєРёС… Р»РёРјРёС‚РѕРІ Рё СЃРєСЂС‹С‚С‹С… РїР»Р°С‚РµР¶РµР№.
-РџРѕР»РЅС‹Р№ РґРѕСЃС‚СѓРї Рє РѕРґРЅРѕРјСѓ РёР· СЃР°РјС‹С… РјРѕС‰РЅС‹С… РР вЂ” Р±РµР· РѕРіСЂР°РЅРёС‡РµРЅРёР№.рџ¤—
+  const welcomeText = `Никаких лимитов и скрытых платежей.
+Полный доступ к одному из самых мощных ИИ — без ограничений.??
 
-рџ§  1 РњР›Рќ+ С‚РѕРєРµРЅРѕРІ РїР°РјСЏС‚Рё
-рџ“љ Р’ 8 СЂР°Р· Р±РѕР»СЊС€Рµ, С‡РµРј Сѓ РєРѕРЅРєСѓСЂРµРЅС‚РѕРІ
-рџ’­ РџРѕРјРЅРёС‚ РІСЃРµ РґРµС‚Р°Р»Рё РІР°С€РёС… Р±РµСЃРµРґ
-рџ“„ РђРЅР°Р»РёР·РёСЂСѓРµС‚ РґРѕРєСѓРјРµРЅС‚С‹ РґРѕ 500 СЃС‚СЂР°РЅРёС†
+?? 1 МЛН+ токенов памяти
+?? В 8 раз больше, чем у конкурентов
+?? Помнит все детали ваших бесед
+?? Анализирует документы до 500 страниц
 
-РџСЂРѕСЃС‚Рѕ РЅР°РїРёС€РёС‚Рµ СЃРѕРѕР±С‰РµРЅРёРµ вЂ” Рё РїРѕР»СѓС‡РёС‚Рµ СѓРјРЅС‹Р№ РѕС‚РІРµС‚!`;
+Просто напишите сообщение — и получите умный ответ!`;
 
   await ctx.reply(welcomeText);
 });
 
-// РћР±СЂР°Р±РѕС‚С‡РёРє РѕР±С‹С‡РЅС‹С… СЃРѕРѕР±С‰РµРЅРёР№
+// Обработчик для полных сообщений /full_xxx
+bot.hears(/^\/full_([a-z0-9_]+)$/, async (ctx) => {
+  const messageId = ctx.match[1];
+  const fullText = LongMessageHandler.getLongMessage(messageId);
+  
+  if (fullText) {
+    await LongMessageHandler.sendLongMessage(ctx, fullText, messageId);
+  } else {
+    await ctx.reply('? Сообщение не найдено или устарело');
+  }
+});
+
+// Обработчик для частей /parts_xxx
+bot.hears(/^\/parts_([a-z0-9_]+)$/, async (ctx) => {
+  const messageId = ctx.match[1];
+  const fullText = LongMessageHandler.getLongMessage(messageId);
+  
+  if (fullText) {
+    await LongMessageHandler.sendLongMessage(ctx, fullText, messageId);
+  } else {
+    await ctx.reply('? Сообщение не найдено или устарело');
+  }
+});
+
+// Обработчик обычных сообщений
 bot.on('text', async (ctx) => {
   if (ctx.message.text.startsWith('/')) return;
   
@@ -83,30 +55,19 @@ bot.on('text', async (ctx) => {
     
     const result = await model.generateContent(ctx.message.text);
     const response = await result.response;
-    let text = response.text();
+    const text = response.text();
     
-    // РћРіСЂР°РЅРёС‡РёРІР°РµРј РјР°РєСЃРёРјР°Р»СЊРЅСѓСЋ РґР»РёРЅСѓ РЅР° РІСЃСЏРєРёР№ СЃР»СѓС‡Р°Р№
-    if (text.length > 10000) {
-      text = text.substring(0, 10000) + '\n\n[... СЃРѕРѕР±С‰РµРЅРёРµ Р±С‹Р»Рѕ СЃРѕРєСЂР°С‰РµРЅРѕ ...]';
-    }
+    // Используем умный обработчик длинных сообщений
+    await LongMessageHandler.sendLongMessage(ctx, text);
     
-    const messages = splitMessage(text);
-    
-    for (let i = 0; i < messages.length; i++) {
-      if (i > 0) {
-        await new Promise(resolve => setTimeout(resolve, 300));
-      }
-      await ctx.reply(messages[i]);
-    }
-    
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error:', error);
-    await ctx.reply('РџСЂРѕРёР·РѕС€Р»Р° РѕС€РёР±РєР°. РџРѕРїСЂРѕР±СѓР№С‚Рµ РїРѕР·Р¶Рµ.');
+    await ctx.reply('Произошла ошибка. Попробуйте позже.');
   }
 });
 
 bot.launch().then(() => {
-  console.log('Bot started with improved message splitting');
+  console.log('Bot started with smart long message handler');
 });
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
