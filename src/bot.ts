@@ -30,7 +30,7 @@ bot.hears(/^\/full_([a-z0-9_]+)$/, async (ctx) => {
   if (fullText) {
     await LongMessageHandler.sendLongMessage(ctx, fullText, messageId);
   } else {
-    await ctx.reply('? Сообщение не найдено или устарело');
+    await ctx.reply('? Message not found or expired');
   }
 });
 
@@ -42,7 +42,7 @@ bot.hears(/^\/parts_([a-z0-9_]+)$/, async (ctx) => {
   if (fullText) {
     await LongMessageHandler.sendLongMessage(ctx, fullText, messageId);
   } else {
-    await ctx.reply('? Сообщение не найдено или устарело');
+    await ctx.reply('? Message not found or expired');
   }
 });
 
@@ -57,18 +57,33 @@ bot.on('text', async (ctx) => {
     const response = await result.response;
     const text = response.text();
     
-    // Используем умный обработчик длинных сообщений
     await LongMessageHandler.sendLongMessage(ctx, text);
     
   } catch (error) {
     console.error('Error:', error);
-    await ctx.reply('Произошла ошибка. Попробуйте позже.');
+    await ctx.reply('Error. Try again later.');
   }
 });
 
-bot.launch().then(() => {
-  console.log('Bot started with smart long message handler');
-});
+// ?? КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ - обработка конфликтов
+const startBot = async () => {
+  try {
+    await bot.launch();
+    console.log('? Bot started successfully');
+  } catch (error: any) {
+    if (error?.response?.description?.includes('Conflict')) {
+      console.log('?? Bot conflict detected, restarting in 30 seconds...');
+      setTimeout(startBot, 30000);
+    } else {
+      console.error('? Failed to start bot:', error);
+      setTimeout(startBot, 60000);
+    }
+  }
+};
 
+// Запускаем бота
+startBot();
+
+// Graceful shutdown
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
