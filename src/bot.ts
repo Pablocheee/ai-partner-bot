@@ -6,46 +6,28 @@ const bot = new Telegraf(config.telegramToken);
 const genAI = new GoogleGenerativeAI(config.geminiApiKey);
 const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
-// Функция для разбивки длинных сообщений
-function splitMessage(text: string, maxLength: number = 4000): string[] {
-  if (text.length <= maxLength) return [text];
+// Упрощенная функция разбивки сообщений
+function splitMessage(text: string, maxLength: number = 4096): string[] {
+  const messages: string[] = [];
   
-  const messages = [];
-  let currentMessage = '';
-  
-  const paragraphs = text.split('\n\n');
-  
-  for (const paragraph of paragraphs) {
-    if ((currentMessage + paragraph).length + 2 > maxLength) {
-      if (currentMessage) {
-        messages.push(currentMessage.trim());
-        currentMessage = '';
-      }
-      
-      // Если один абзац слишком длинный, разбиваем по предложениям
-      if (paragraph.length > maxLength) {
-        const sentences = paragraph.split('. ');
-        for (const sentence of sentences) {
-          if ((currentMessage + sentence).length + 2 > maxLength) {
-            if (currentMessage) {
-              messages.push(currentMessage.trim());
-              currentMessage = '';
-            }
-            messages.push(sentence.substring(0, maxLength));
-          } else {
-            currentMessage += sentence + '. ';
-          }
-        }
-      } else {
-        currentMessage = paragraph + '\n\n';
-      }
-    } else {
-      currentMessage += paragraph + '\n\n';
-    }
+  if (text.length <= maxLength) {
+    return [text];
   }
   
-  if (currentMessage) {
-    messages.push(currentMessage.trim());
+  let startIndex = 0;
+  while (startIndex < text.length) {
+    let endIndex = startIndex + maxLength;
+    
+    // Если не конец текста, находим ближайший пробел для разрыва
+    if (endIndex < text.length) {
+      endIndex = text.lastIndexOf(' ', endIndex);
+      if (endIndex <= startIndex) {
+        endIndex = startIndex + maxLength;
+      }
+    }
+    
+    messages.push(text.substring(startIndex, endIndex).trim());
+    startIndex = endIndex;
   }
   
   return messages;
@@ -68,35 +50,37 @@ bot.start(async (ctx) => {
 
 // Обработчик обычных сообщений
 bot.on('text', async (ctx) => {
-  // Пропускаем команды
   if (ctx.message.text.startsWith('/')) return;
   
   try {
-    // Показываем что бот "печатает"
     await ctx.sendChatAction('typing');
     
     const result = await model.generateContent(ctx.message.text);
     const response = await result.response;
     const text = response.text();
     
-    // Разбиваем длинные сообщения
+    // Разбиваем сообщение на части
     const messages = splitMessage(text);
     
-    // Отправляем первое сообщение
+    // Отправляем первую часть
     await ctx.reply(messages[0]);
     
-    // Отправляем остальные сообщения с задержкой
+    // Отправляем остальные части с задержкой
     for (let i = 1; i < messages.length; i++) {
-      await new Promise(resolve => setTimeout(resolve, 300)); // Задержка 300мс
+      await new Promise(resolve => setTimeout(resolve, 500));
       await ctx.reply(messages[i]);
     }
     
   } catch (error: any) {
     console.error('Error:', error);
-    await ctx.reply('Произошла ошибка при обработке запроса');
+    await ctx.reply('Произошла ошибка при обработке запроса. Попробуйте позже.');
   }
 });
 
+// Запуск бота
 bot.launch().then(() => {
-  console.log('Bot started with message splitting');
+  console.log('Bot started with fixed message splitting');
 });
+
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
